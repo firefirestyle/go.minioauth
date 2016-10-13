@@ -9,16 +9,10 @@ import (
 	"google.golang.org/appengine"
 )
 
-//const (
-//	UrlApiRoot = "/api/v1"
-//)
 const (
-	//	UrlTwitterTokenUrlRedirect                          = "twitter/tokenurl/redirect"
-	UrlTwitterTokenUrlRedirect_callbackUrl              = "cb"
-	UrlTwitterTokenUrlRedirect_errorNotFoundCallbackUrl = "1001"
-	UrlTwitterTokenUrlRedirect_errorFailedToMakeToken   = "1002"
-	//	UrlTwitterTokenCallback                             = "twitter/tokenurl/callback"
-	UrlTwitterTokenCallback_callbackUrl = "cb"
+	UrlOptCallbackUrl              = "cb"
+	UrlOptErrorNotFoundCallbackUrl = "1001"
+	UrlOptErrorFailedToMakeToken   = "1002"
 )
 
 type TwitterOAuthConfig struct {
@@ -38,8 +32,7 @@ type TwitterHandler struct {
 func NewTwitterHandler(callbackUrl string, //
 	config TwitterOAuthConfig, //
 	onRequest func(url.Values) map[string]string,
-	onFoundUser func(url.Values, *SendAccessTokenResult, //
-	) map[string]string) *TwitterHandler {
+	onFoundUser func(url.Values, *SendAccessTokenResult) map[string]string) *TwitterHandler {
 	twitterHandlerObj := new(TwitterHandler)
 	twitterHandlerObj.callbackUrl = callbackUrl
 	twitterHandlerObj.twitterManager = NewTwitterManager( //
@@ -55,7 +48,7 @@ func (obj *TwitterHandler) MakeUrlNotFoundCallbackError(baseAddr string) (string
 		return "", err
 	}
 	query := urlObj.Query()
-	query.Add("error", UrlTwitterTokenUrlRedirect_errorNotFoundCallbackUrl)
+	query.Add("error", UrlOptErrorNotFoundCallbackUrl)
 	urlObj.RawQuery = query.Encode()
 	return urlObj.String(), nil
 }
@@ -66,49 +59,47 @@ func (obj *TwitterHandler) MakeUrlFailedToMakeToken(baseAddr string) (string, er
 		return "", err
 	}
 	query := urlObj.Query()
-	query.Add("error", UrlTwitterTokenUrlRedirect_errorFailedToMakeToken)
+	query.Add("error", UrlOptErrorFailedToMakeToken)
 	urlObj.RawQuery = query.Encode()
 	return urlObj.String(), nil
 }
 
 func (obj *TwitterHandler) TwitterLoginEntry(w http.ResponseWriter, r *http.Request) {
-	ctx := appengine.NewContext(r)
-	values := r.URL.Query()
-
-	callbackUrl := values.Get(UrlTwitterTokenUrlRedirect_callbackUrl)
+	callbackUrl := r.URL.Query().Get(UrlOptCallbackUrl)
+	//
+	// make redirect URL
 	redirectUrl := ""
 	if callbackUrl == "" {
 		redirectUrl, _ = obj.MakeUrlNotFoundCallbackError(r.RemoteAddr)
 	} else {
 		//
-		twitterCallbackObj, _ := url.Parse(obj.callbackUrl)
-		{
-			twitterValues := twitterCallbackObj.Query()
-			twitterValues.Add(UrlTwitterTokenCallback_callbackUrl, callbackUrl)
-			twitterCallbackObj.RawQuery = twitterValues.Encode()
-		}
+		callbackUrlObj, _ := url.Parse(obj.callbackUrl)
+		tmpValues := callbackUrlObj.Query()
+		tmpValues.Add(UrlOptCallbackUrl, callbackUrl)
 		if obj.onRequest != nil {
-			twitterCallbackValues := twitterCallbackObj.Query()
 			opts := obj.onRequest(r.URL.Query())
 			for k, v := range opts {
-				twitterCallbackValues.Add(k, v)
+				tmpValues.Add(k, v)
 			}
-			twitterCallbackObj.RawQuery = twitterCallbackValues.Encode()
 		}
+		callbackUrlObj.RawQuery = tmpValues.Encode()
+
 		//
 		twitterObj := obj.twitterManager.NewTwitter()
-		oauthResult, err := twitterObj.SendRequestToken(ctx, twitterCallbackObj.String())
+		oauthResult, err := twitterObj.SendRequestToken(appengine.NewContext(r), callbackUrlObj.String())
 		if err != nil {
-			urlPattern1, errPattern1 := obj.MakeUrlFailedToMakeToken(callbackUrl)
-			if errPattern1 != nil {
+			failedOAuthUrl, err := obj.MakeUrlFailedToMakeToken(callbackUrl)
+			if err != nil {
 				redirectUrl, _ = obj.MakeUrlNotFoundCallbackError(r.RemoteAddr)
 			} else {
-				redirectUrl = urlPattern1
+				redirectUrl = failedOAuthUrl
 			}
 		} else {
 			redirectUrl = oauthResult.GetOAuthTokenUrl()
 		}
 	}
+	//
+	// Do Redirect
 	http.Redirect(w, r, redirectUrl, http.StatusFound)
 }
 
@@ -117,7 +108,7 @@ func (obj *TwitterHandler) TwitterLoginExit(w http.ResponseWriter, r *http.Reque
 	ctx := appengine.NewContext(r)
 	//
 	//
-	callbackUrl := r.URL.Query().Get(UrlTwitterTokenCallback_callbackUrl)
+	callbackUrl := r.URL.Query().Get(UrlOptCallbackUrl)
 	urlObj, err := url.Parse(callbackUrl)
 	if err != nil {
 		removeUrlObj, _ := url.Parse(r.RemoteAddr)
