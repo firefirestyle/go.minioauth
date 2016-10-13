@@ -104,8 +104,6 @@ func (obj *TwitterHandler) TwitterLoginEntry(w http.ResponseWriter, r *http.Requ
 }
 
 func (obj *TwitterHandler) TwitterLoginExit(w http.ResponseWriter, r *http.Request) {
-	w.Header().Add("Access-Control-Allow-Origin", "*")
-	ctx := appengine.NewContext(r)
 	//
 	//
 	callbackUrl := r.URL.Query().Get(UrlOptCallbackUrl)
@@ -118,10 +116,11 @@ func (obj *TwitterHandler) TwitterLoginExit(w http.ResponseWriter, r *http.Reque
 		http.Redirect(w, r, removeUrlObj.String(), http.StatusFound)
 		return
 	}
+
 	//
 	//
 	twitterObj := obj.twitterManager.NewTwitter()
-	rt, err := twitterObj.OnCallbackSendRequestToken(ctx, r.URL)
+	rt, err := twitterObj.OnCallbackSendRequestToken(appengine.NewContext(r), r.URL)
 	if err != nil || rt.GetScreenName() == "" || rt.GetUserID() == "" {
 		rt = nil
 		if err == nil && (rt.GetScreenName() == "" || rt.GetUserID() == "") {
@@ -144,7 +143,6 @@ func (obj *TwitterHandler) TwitterLoginExit(w http.ResponseWriter, r *http.Reque
 		query.Add("error", "oauth")
 		urlObj.RawQuery = query.Encode()
 		http.Redirect(w, r, urlObj.String(), http.StatusFound)
-		return
 	} else {
 		http.Redirect(w, r, urlObj.String(), http.StatusFound)
 	}
