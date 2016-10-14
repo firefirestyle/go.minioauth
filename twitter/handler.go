@@ -7,6 +7,7 @@ import (
 	"errors"
 
 	"google.golang.org/appengine"
+	//	"google.golang.org/appengine/log"
 )
 
 const (
@@ -65,38 +66,47 @@ func (obj *TwitterHandler) MakeUrlFailedToMakeToken(baseAddr string) (string, er
 }
 
 func (obj *TwitterHandler) TwitterLoginEntry(w http.ResponseWriter, r *http.Request) {
-	callbackUrl := r.URL.Query().Get(UrlOptCallbackUrl)
+	clCallbackUrl := r.URL.Query().Get(UrlOptCallbackUrl)
+
 	//
 	// make redirect URL
+	if clCallbackUrl == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	//
+	clCallbackUrlObj, clCallbackUrlErr := url.Parse(clCallbackUrl)
+	if clCallbackUrlErr != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	//
+	svCallbackUrlObj, _ := url.Parse(obj.callbackUrl)
+	if svCallbackUrlObj.Path == clCallbackUrlObj.Path {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	//
+	tmpValues := svCallbackUrlObj.Query()
+	tmpValues.Add(UrlOptCallbackUrl, clCallbackUrl)
+	if obj.onRequest != nil {
+		opts := obj.onRequest(r.URL.Query())
+		for k, v := range opts {
+			tmpValues.Add(k, v)
+		}
+	}
+	svCallbackUrlObj.RawQuery = tmpValues.Encode()
+	//
+	//
 	redirectUrl := ""
-	if callbackUrl == "" {
-		redirectUrl, _ = obj.MakeUrlNotFoundCallbackError(r.RemoteAddr)
-	} else {
-		//
-		callbackUrlObj, _ := url.Parse(obj.callbackUrl)
-		tmpValues := callbackUrlObj.Query()
-		tmpValues.Add(UrlOptCallbackUrl, callbackUrl)
-		if obj.onRequest != nil {
-			opts := obj.onRequest(r.URL.Query())
-			for k, v := range opts {
-				tmpValues.Add(k, v)
-			}
-		}
-		callbackUrlObj.RawQuery = tmpValues.Encode()
 
-		//
-		twitterObj := obj.twitterManager.NewTwitter()
-		oauthResult, err := twitterObj.SendRequestToken(appengine.NewContext(r), callbackUrlObj.String())
-		if err != nil {
-			failedOAuthUrl, err := obj.MakeUrlFailedToMakeToken(callbackUrl)
-			if err != nil {
-				redirectUrl, _ = obj.MakeUrlNotFoundCallbackError(r.RemoteAddr)
-			} else {
-				redirectUrl = failedOAuthUrl
-			}
-		} else {
-			redirectUrl = oauthResult.GetOAuthTokenUrl()
-		}
+	twitterObj := obj.twitterManager.NewTwitter()
+	oauthResult, err := twitterObj.SendRequestToken(appengine.NewContext(r), svCallbackUrlObj.String())
+	if err != nil {
+		failedOAuthUrl, _ := obj.MakeUrlFailedToMakeToken(clCallbackUrl)
+		redirectUrl = failedOAuthUrl
+	} else {
+		redirectUrl = oauthResult.GetOAuthTokenUrl()
 	}
 	//
 	// Do Redirect
