@@ -25,14 +25,14 @@ type TwitterOAuthConfig struct {
 
 type TwitterHandler struct {
 	twitterManager *TwitterManager
-	onRequest      func(url.Values) map[string]string
-	onFoundUser    func(url.Values, *SendAccessTokenResult) map[string]string
+	onRequest      func(http.ResponseWriter, *http.Request, *TwitterHandler) map[string]string
+	onFoundUser    func(http.ResponseWriter, *http.Request, *TwitterHandler, *SendAccessTokenResult) map[string]string
 	callbackUrl    string
 }
 
 type TwitterHundlerOnEvent struct {
-	OnRequest   func(url.Values) map[string]string
-	OnFoundUser func(url.Values, *SendAccessTokenResult) map[string]string
+	OnRequest   func(http.ResponseWriter, *http.Request, *TwitterHandler) map[string]string
+	OnFoundUser func(http.ResponseWriter, *http.Request, *TwitterHandler, *SendAccessTokenResult) map[string]string
 }
 
 func NewTwitterHandler(callbackUrl string, //
@@ -94,7 +94,7 @@ func (obj *TwitterHandler) TwitterLoginEntry(w http.ResponseWriter, r *http.Requ
 	tmpValues := svCallbackUrlObj.Query()
 	tmpValues.Add(UrlOptCallbackUrl, clCallbackUrl)
 	if obj.onRequest != nil {
-		opts := obj.onRequest(r.URL.Query())
+		opts := obj.onRequest(w, r, obj)
 		for k, v := range opts {
 			tmpValues.Add(k, v)
 		}
@@ -144,7 +144,7 @@ func (obj *TwitterHandler) TwitterLoginExit(w http.ResponseWriter, r *http.Reque
 
 	if obj.onFoundUser != nil {
 		values := urlObj.Query()
-		opts := obj.onFoundUser(r.URL.Query(), rt)
+		opts := obj.onFoundUser(w, r, obj, rt)
 		for k, v := range opts {
 			values.Add(k, v)
 		}
