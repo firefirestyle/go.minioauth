@@ -30,16 +30,20 @@ type TwitterHandler struct {
 	callbackUrl    string
 }
 
+type TwitterHundlerOnEvent struct {
+	OnRequest   func(url.Values) map[string]string
+	OnFoundUser func(url.Values, *SendAccessTokenResult) map[string]string
+}
+
 func NewTwitterHandler(callbackUrl string, //
 	config TwitterOAuthConfig, //
-	onRequest func(url.Values) map[string]string,
-	onFoundUser func(url.Values, *SendAccessTokenResult) map[string]string) *TwitterHandler {
+	onEvent TwitterHundlerOnEvent) *TwitterHandler {
 	twitterHandlerObj := new(TwitterHandler)
 	twitterHandlerObj.callbackUrl = callbackUrl
 	twitterHandlerObj.twitterManager = NewTwitterManager( //
 		config.ConsumerKey, config.ConsumerSecret, config.AccessToken, config.AccessTokenSecret)
-	twitterHandlerObj.onFoundUser = onFoundUser
-	twitterHandlerObj.onRequest = onRequest
+	twitterHandlerObj.onFoundUser = onEvent.OnFoundUser
+	twitterHandlerObj.onRequest = onEvent.OnRequest
 	return twitterHandlerObj
 }
 
