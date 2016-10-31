@@ -69,7 +69,7 @@ func (obj *TwitterHandler) MakeUrlFailedToMakeToken(baseAddr string) (string, er
 	return urlObj.String(), nil
 }
 
-func (obj *TwitterHandler) TwitterLoginEntry(w http.ResponseWriter, r *http.Request) {
+func (obj *TwitterHandler) HandleLoginEntry(w http.ResponseWriter, r *http.Request) {
 	clCallbackUrl := r.URL.Query().Get(UrlOptCallbackUrl)
 
 	//
@@ -117,7 +117,7 @@ func (obj *TwitterHandler) TwitterLoginEntry(w http.ResponseWriter, r *http.Requ
 	http.Redirect(w, r, redirectUrl, http.StatusFound)
 }
 
-func (obj *TwitterHandler) TwitterLoginExit(w http.ResponseWriter, r *http.Request) {
+func (obj *TwitterHandler) HandleLoginExit(w http.ResponseWriter, r *http.Request) {
 	//
 	//
 	callbackUrl := r.URL.Query().Get(UrlOptCallbackUrl)
