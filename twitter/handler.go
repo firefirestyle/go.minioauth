@@ -6,6 +6,13 @@ import (
 
 	"errors"
 
+	"crypto/sha1"
+	"encoding/base64"
+	"io"
+
+	"strings"
+
+	"github.com/firefirestyle/go.miniprop"
 	"google.golang.org/appengine"
 	//	"google.golang.org/appengine/log"
 )
@@ -21,29 +28,43 @@ type TwitterOAuthConfig struct {
 	ConsumerSecret    string
 	AccessToken       string
 	AccessTokenSecret string
+	CallbackUrl       string
+	SecretSign        string
 }
 
 type TwitterHandler struct {
 	twitterManager *TwitterManager
-	onRequest      func(http.ResponseWriter, *http.Request, *TwitterHandler) map[string]string
-	onFoundUser    func(http.ResponseWriter, *http.Request, *TwitterHandler, *SendAccessTokenResult) map[string]string
-	callbackUrl    string
+	config         TwitterOAuthConfig
+	onEvent        TwitterHundlerOnEvent
 }
 
 type TwitterHundlerOnEvent struct {
-	OnRequest   func(http.ResponseWriter, *http.Request, *TwitterHandler) map[string]string
+	OnRequest   func(http.ResponseWriter, *http.Request, *TwitterHandler) (map[string]string, error)
 	OnFoundUser func(http.ResponseWriter, *http.Request, *TwitterHandler, *SendAccessTokenResult) map[string]string
 }
 
-func NewTwitterHandler(callbackUrl string, //
+func NewTwitterHandler( //
 	config TwitterOAuthConfig, //
 	onEvent TwitterHundlerOnEvent) *TwitterHandler {
 	twitterHandlerObj := new(TwitterHandler)
-	twitterHandlerObj.callbackUrl = callbackUrl
+	//	twitterHandlerObj.callbackUrl = callbackUrl
 	twitterHandlerObj.twitterManager = NewTwitterManager( //
 		config.ConsumerKey, config.ConsumerSecret, config.AccessToken, config.AccessTokenSecret)
-	twitterHandlerObj.onFoundUser = onEvent.OnFoundUser
-	twitterHandlerObj.onRequest = onEvent.OnRequest
+	twitterHandlerObj.config = config
+
+	//
+	//
+	if onEvent.OnRequest == nil {
+		onEvent.OnRequest = func(http.ResponseWriter, *http.Request, *TwitterHandler) (map[string]string, error) {
+			return map[string]string{}, nil
+		}
+	}
+	if onEvent.OnFoundUser == nil {
+		onEvent.OnFoundUser = func(http.ResponseWriter, *http.Request, *TwitterHandler, *SendAccessTokenResult) map[string]string {
+			return map[string]string{}
+		}
+	}
+	twitterHandlerObj.onEvent = onEvent
 	return twitterHandlerObj
 }
 
@@ -85,40 +106,94 @@ func (obj *TwitterHandler) HandleLoginEntry(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	//
-	svCallbackUrlObj, _ := url.Parse(obj.callbackUrl)
-	if svCallbackUrlObj.Path == clCallbackUrlObj.Path {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
 	//
-	tmpValues := svCallbackUrlObj.Query()
-	tmpValues.Add(UrlOptCallbackUrl, clCallbackUrl)
-	if obj.onRequest != nil {
-		opts := obj.onRequest(w, r, obj)
-		for k, v := range opts {
-			tmpValues.Add(k, v)
+	opts, optsErr := obj.onEvent.OnRequest(w, r, obj)
+	if optsErr != nil {
+		tmpValues := clCallbackUrlObj.Query()
+		if opts != nil {
+			for k, v := range opts {
+				tmpValues.Add(k, v)
+			}
 		}
-	}
-	svCallbackUrlObj.RawQuery = tmpValues.Encode()
-	//
-	//
-	redirectUrl := ""
-
-	twitterObj := obj.twitterManager.NewTwitter()
-	oauthResult, err := twitterObj.SendRequestToken(appengine.NewContext(r), svCallbackUrlObj.String())
-	if err != nil {
-		failedOAuthUrl, _ := obj.MakeUrlFailedToMakeToken(clCallbackUrl)
-		redirectUrl = failedOAuthUrl
+		clCallbackUrlObj.RawQuery = tmpValues.Encode()
+		http.Redirect(w, r, clCallbackUrlObj.String(), http.StatusFound)
+		return
 	} else {
-		redirectUrl = oauthResult.GetOAuthTokenUrl()
+		//
+		svCallbackUrlObj, _ := url.Parse(obj.config.CallbackUrl)
+		if svCallbackUrlObj.Path == clCallbackUrlObj.Path {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		//
+		tmpValues := svCallbackUrlObj.Query()
+		tmpValues.Add(UrlOptCallbackUrl, clCallbackUrl)
+
+		if opts != nil {
+			for k, v := range opts {
+				tmpValues.Add(k, v)
+			}
+		}
+		//
+		{
+			publicSign := miniprop.MakeRandomId()
+			tmpValues.Add("ps", publicSign)
+
+			hash := sha1.New()
+			io.WriteString(hash, publicSign)
+			io.WriteString(hash, opts["kw"])
+			io.WriteString(hash, opts["kv"])
+			io.WriteString(hash, clCallbackUrlObj.String())
+			io.WriteString(hash, obj.config.SecretSign)
+			calcHash := base64.StdEncoding.EncodeToString(hash.Sum(nil))
+			tmpValues.Add("hash", calcHash)
+		}
+		//
+		svCallbackUrlObj.RawQuery = tmpValues.Encode()
+		//
+		//
+		redirectUrl := ""
+
+		twitterObj := obj.twitterManager.NewTwitter()
+		oauthResult, err := twitterObj.SendRequestToken(appengine.NewContext(r), svCallbackUrlObj.String())
+		if err != nil {
+			failedOAuthUrl, _ := obj.MakeUrlFailedToMakeToken(clCallbackUrl)
+			redirectUrl = failedOAuthUrl
+		} else {
+			redirectUrl = oauthResult.GetOAuthTokenUrl()
+		}
+		//
+		// Do Redirect
+		http.Redirect(w, r, redirectUrl, http.StatusFound)
 	}
-	//
-	// Do Redirect
-	http.Redirect(w, r, redirectUrl, http.StatusFound)
 }
 
 func (obj *TwitterHandler) HandleLoginExit(w http.ResponseWriter, r *http.Request) {
 	//
+	//
+	// response easy check
+	{
+		values := r.URL.Query()
+		hashV := values.Get("hash")
+		publicSign := values.Get("ps")
+		kw := values.Get("kw")
+		kv := values.Get("kv")
+		clCallback := values.Get("cb")
+		{
+			hash := sha1.New()
+			io.WriteString(hash, publicSign)
+			io.WriteString(hash, kw)
+			io.WriteString(hash, kv)
+			io.WriteString(hash, clCallback)
+			io.WriteString(hash, obj.config.SecretSign)
+			calcHash := base64.StdEncoding.EncodeToString(hash.Sum(nil))
+
+			if strings.Compare(calcHash, hashV) != 0 {
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+		}
+	}
 	//
 	callbackUrl := r.URL.Query().Get(UrlOptCallbackUrl)
 	urlObj, err := url.Parse(callbackUrl)
@@ -142,9 +217,9 @@ func (obj *TwitterHandler) HandleLoginExit(w http.ResponseWriter, r *http.Reques
 		}
 	}
 
-	if obj.onFoundUser != nil {
+	if obj.onEvent.OnFoundUser != nil {
 		values := urlObj.Query()
-		opts := obj.onFoundUser(w, r, obj, rt)
+		opts := obj.onEvent.OnFoundUser(w, r, obj, rt)
 		for k, v := range opts {
 			values.Add(k, v)
 		}
