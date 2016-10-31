@@ -17,7 +17,7 @@ type Facebook struct {
 	OAuthAccessTokenAddr string //"https://graph.facebook.com/oauth/access_token"
 }
 
-func NewFaceBook(appId string, appSecret string) *Facebook {
+func NewFacebook(appId string, appSecret string) *Facebook {
 	ret := new(Facebook)
 	ret.AppId = appId
 	ret.AppSecret = appSecret

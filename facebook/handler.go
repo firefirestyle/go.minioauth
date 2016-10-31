@@ -39,7 +39,7 @@ type FacebookHandler struct {
 
 type FacebookHundlerOnEvent struct {
 	OnRequest   func(http.ResponseWriter, *http.Request, *FacebookHandler) (map[string]string, error)
-	OnFoundUser func(http.ResponseWriter, *http.Request, *FacebookHandler, *GetMeResponse) map[string]string
+	OnFoundUser func(http.ResponseWriter, *http.Request, *FacebookHandler, *GetMeResponse, *AccessTokenResponse) map[string]string
 }
 
 func NewFacebookHandler(config FacebookOAuthConfig, onEvent FacebookHundlerOnEvent) *FacebookHandler {
@@ -49,12 +49,12 @@ func NewFacebookHandler(config FacebookOAuthConfig, onEvent FacebookHundlerOnEve
 		}
 	}
 	if onEvent.OnFoundUser == nil {
-		onEvent.OnFoundUser = func(http.ResponseWriter, *http.Request, *FacebookHandler, *GetMeResponse) map[string]string {
+		onEvent.OnFoundUser = func(http.ResponseWriter, *http.Request, *FacebookHandler, *GetMeResponse, *AccessTokenResponse) map[string]string {
 			return map[string]string{}
 		}
 	}
 	return &FacebookHandler{
-		facebookObj: NewFaceBook(config.ConfigFacebookAppId, config.ConfigFacebookAppSecret),
+		facebookObj: NewFacebook(config.ConfigFacebookAppId, config.ConfigFacebookAppSecret),
 		onEvent:     onEvent,
 		config:      config,
 	}
@@ -180,7 +180,7 @@ func (obj *FacebookHandler) HandleLoginExit(w http.ResponseWriter, r *http.Reque
 	//
 	clCallbackObj, _ := url.Parse(r.URL.Query().Get("cb"))
 	tmpValues := clCallbackObj.Query()
-	kv := obj.onEvent.OnFoundUser(w, r, obj, meObj)
+	kv := obj.onEvent.OnFoundUser(w, r, obj, meObj, tokk)
 	for k, v := range kv {
 		tmpValues.Add(k, v)
 	}
