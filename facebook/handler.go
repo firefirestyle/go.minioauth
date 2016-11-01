@@ -60,7 +60,7 @@ func NewFacebookHandler(config FacebookOAuthConfig, onEvent FacebookHundlerOnEve
 	}
 }
 
-func (obj *FacebookHandler) HandlerLoginEntry(w http.ResponseWriter, r *http.Request) {
+func (obj *FacebookHandler) HandleLoginEntry(w http.ResponseWriter, r *http.Request) {
 	w.Header().Add("Access-Control-Allow-Origin", "*")
 	var outerOpts map[string]string = nil
 	var outerErr error = nil
