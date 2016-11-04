@@ -94,19 +94,19 @@ func (obj *TwitterHandler) MakeUrlFailedToMakeToken(baseAddr string) (string, er
 
 func (obj *TwitterHandler) HandleLoginEntry(w http.ResponseWriter, r *http.Request) {
 	clCallbackUrl := r.URL.Query().Get(UrlOptCallbackUrl)
-	ctx := appengine.NewContext(r)
-	Debug(ctx, "HandleLoginEntry")
+	//ctx := appengine.NewContext(r)
+	//Debug(ctx, "HandleLoginEntry")
 	//
 	// make redirect URL
 	if clCallbackUrl == "" {
-		Debug(ctx, "HandleLoginEntry callback error")
+		//Debug(ctx, "HandleLoginEntry callback error")
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 	//
 	clCallbackUrlObj, clCallbackUrlErr := url.Parse(clCallbackUrl)
 	if clCallbackUrlErr != nil {
-		Debug(ctx, "HandleLoginEntry parse error")
+		//Debug(ctx, "HandleLoginEntry parse error")
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
@@ -114,7 +114,7 @@ func (obj *TwitterHandler) HandleLoginEntry(w http.ResponseWriter, r *http.Reque
 	//
 	opts, optsErr := obj.onEvent.OnRequest(w, r, obj)
 	if optsErr != nil {
-		Debug(ctx, "HandleLoginEntry onRequest err")
+		//Debug(ctx, "HandleLoginEntry onRequest err")
 		tmpValues := clCallbackUrlObj.Query()
 		if opts != nil {
 			for k, v := range opts {
@@ -128,7 +128,7 @@ func (obj *TwitterHandler) HandleLoginEntry(w http.ResponseWriter, r *http.Reque
 		//
 		svCallbackUrlObj, _ := url.Parse(obj.config.CallbackUrl)
 		if svCallbackUrlObj.Path == clCallbackUrlObj.Path {
-			Debug(ctx, "HandleLoginEntry config parse err")
+			//Debug(ctx, "HandleLoginEntry config parse err")
 
 			w.WriteHeader(http.StatusBadRequest)
 			return
@@ -165,12 +165,12 @@ func (obj *TwitterHandler) HandleLoginEntry(w http.ResponseWriter, r *http.Reque
 		twitterObj := obj.twitterManager.NewTwitter()
 		oauthResult, err := twitterObj.SendRequestToken(appengine.NewContext(r), svCallbackUrlObj.String())
 		if err != nil {
-			Debug(ctx, "HandleLoginEntry make token errr :"+err.Error())
+			//Debug(ctx, "HandleLoginEntry make token errr :"+err.Error())
 
 			failedOAuthUrl, _ := obj.MakeUrlFailedToMakeToken(clCallbackUrl)
 			redirectUrl = failedOAuthUrl
 		} else {
-			Debug(ctx, "HandleLoginEntry config ok log :"+oauthResult.GetOAuthTokenUrl())
+			//Debug(ctx, "HandleLoginEntry config ok log :"+oauthResult.GetOAuthTokenUrl())
 
 			redirectUrl = oauthResult.GetOAuthTokenUrl()
 		}
