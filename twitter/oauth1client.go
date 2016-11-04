@@ -81,8 +81,16 @@ func (obj *OAuth1Client) Post(ctx context.Context,
 
 	//
 	//
-	//
-	client := urlfetch.Client(ctx)
+	client := http.Client{
+		Transport: &urlfetch.Transport{
+			Context: ctx,
+			AllowInvalidServerCertificate: true,
+			//			Deadline: 10 * time.Second,
+		},
+	}
+	//client := urlfetch.Client(ctx)
+	//	client.Transport.
+
 	response, err1 := client.Do(request)
 	if err1 != nil {
 		return "", err1
