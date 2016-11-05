@@ -10,6 +10,7 @@ import (
 	"google.golang.org/appengine"
 	//	"google.golang.org/appengine/log"
 
+	"github.com/firefirestyle/go.miniprop"
 	"golang.org/x/net/context"
 	"google.golang.org/appengine/log"
 )
@@ -200,4 +201,20 @@ func (obj *TwitterHandler) HandleLoginExit(w http.ResponseWriter, r *http.Reques
 
 func Debug(ctx context.Context, message string) {
 	log.Infof(ctx, message)
+}
+
+func HandleError(w http.ResponseWriter, r *http.Request, outputProp *miniprop.MiniProp, errorCode int, errorMessage string) {
+	//
+	//
+	if outputProp == nil {
+		outputProp = miniprop.NewMiniProp()
+	}
+	if errorCode != 0 {
+		outputProp.SetInt("errorCode", errorCode)
+	}
+	if errorMessage != "" {
+		outputProp.SetString("errorMessage", errorMessage)
+	}
+	w.WriteHeader(http.StatusBadRequest)
+	w.Write(outputProp.ToJson())
 }

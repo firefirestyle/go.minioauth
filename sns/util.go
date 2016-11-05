@@ -26,7 +26,6 @@ import (
 //
 func WithHashAndValue(tmpValues url.Values, privateSign string, callbackUrl string, opts map[string]string) {
 	publicSign := strconv.FormatInt(time.Now().Unix(), 36)
-	tmpValues.Add("ps", publicSign)
 	keys := make([]string, 0)
 	{
 		for k, _ := range opts {
@@ -47,6 +46,7 @@ func WithHashAndValue(tmpValues url.Values, privateSign string, callbackUrl stri
 	//
 	io.WriteString(hash, privateSign)
 	calcHash := base64.StdEncoding.EncodeToString(hash.Sum(nil))
+	tmpValues.Add("ps", publicSign)
 	tmpValues.Add("hash", calcHash)
 	tmpValues.Add("ks", string(propObj.ToJson()))
 }

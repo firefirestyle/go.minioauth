@@ -3,15 +3,9 @@ package facebook
 import (
 	"net/http"
 
-	"io"
 	"net/url"
 
-	"crypto/sha1"
-
-	"encoding/base64"
-
-	"strings"
-
+	"github.com/firefirestyle/go.minioauth/sns"
 	"github.com/firefirestyle/go.miniprop"
 	"golang.org/x/net/context"
 	"google.golang.org/appengine"
@@ -70,7 +64,7 @@ func (obj *FacebookHandler) HandleLoginEntry(w http.ResponseWriter, r *http.Requ
 	//
 	clCallbackUrlObj, clCallbackUrlErr := url.Parse(r.URL.Query().Get(UrlOptCallbackUrl))
 	if clCallbackUrlErr != nil {
-		w.WriteHeader(http.StatusBadRequest)
+		HandleError(w, r, nil, 3030, clCallbackUrlErr.Error())
 		return
 	}
 
@@ -85,43 +79,30 @@ func (obj *FacebookHandler) HandleLoginEntry(w http.ResponseWriter, r *http.Requ
 		clCallbackUrlObj.RawQuery = tmpValues.Encode()
 		http.Redirect(w, r, clCallbackUrlObj.String(), http.StatusFound)
 		return
-	} else {
+	}
 
-		//
-		//
-		svCallbackUrlObj, _ := url.Parse(obj.config.CallbackUrl)
-		if svCallbackUrlObj.Path == clCallbackUrlObj.Path {
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-		tmpValues := svCallbackUrlObj.Query()
-		tmpValues.Add(UrlOptCallbackUrl, clCallbackUrlObj.String())
-
-		if outerOpts != nil {
-			for k, v := range outerOpts {
-				tmpValues.Add(k, v)
-			}
-		}
-		//
-		{
-			publicSign := miniprop.MakeRandomId()
-			tmpValues.Add("ps", publicSign)
-
-			hash := sha1.New()
-			io.WriteString(hash, publicSign)
-			io.WriteString(hash, outerOpts["kw"])
-			io.WriteString(hash, outerOpts["kv"])
-			io.WriteString(hash, clCallbackUrlObj.String())
-			io.WriteString(hash, obj.config.SecretSign)
-			calcHash := base64.StdEncoding.EncodeToString(hash.Sum(nil))
-			tmpValues.Add("hash", calcHash)
-		}
-		//
-		svCallbackUrlObj.RawQuery = tmpValues.Encode()
-		oauthUrl := obj.facebookObj.GetRequestToken(svCallbackUrlObj.String())
-		http.Redirect(w, r, oauthUrl, http.StatusFound)
+	//
+	//
+	svCallbackUrlObj, svCallbackUrlErr := url.Parse(obj.config.CallbackUrl)
+	if svCallbackUrlErr != nil {
+		HandleError(w, r, nil, 3040, svCallbackUrlErr.Error())
 		return
 	}
+	tmpValues := svCallbackUrlObj.Query()
+	tmpValues.Add(UrlOptCallbackUrl, clCallbackUrlObj.String())
+
+	if outerOpts != nil {
+		for k, v := range outerOpts {
+			tmpValues.Add(k, v)
+		}
+	}
+	//
+	sns.WithHashAndValue(tmpValues, obj.config.SecretSign, clCallbackUrlObj.String(), outerOpts)
+	//
+	svCallbackUrlObj.RawQuery = tmpValues.Encode()
+	oauthUrl := obj.facebookObj.GetRequestToken(svCallbackUrlObj.String())
+	http.Redirect(w, r, oauthUrl, http.StatusFound)
+	return
 
 }
 
@@ -131,27 +112,15 @@ func (obj *FacebookHandler) HandleLoginExit(w http.ResponseWriter, r *http.Reque
 	facebookObj := obj.facebookObj
 	//
 	// response easy check
-	{
-		values := r.URL.Query()
-		hashV := values.Get("hash")
-		publicSign := values.Get("ps")
-		kw := values.Get("kw")
-		kv := values.Get("kv")
-		clCallback := values.Get("cb")
-		{
-			hash := sha1.New()
-			io.WriteString(hash, publicSign)
-			io.WriteString(hash, kw)
-			io.WriteString(hash, kv)
-			io.WriteString(hash, clCallback)
-			io.WriteString(hash, obj.config.SecretSign)
-			calcHash := base64.StdEncoding.EncodeToString(hash.Sum(nil))
-
-			if strings.Compare(calcHash, hashV) != 0 {
-				w.WriteHeader(http.StatusBadRequest)
-				return
-			}
-		}
+	clCallbackObj, clCallbackErr := url.Parse(r.URL.Query().Get("cb"))
+	if clCallbackErr != nil {
+		HandleError(w, r, nil, 3000, "Failed to make clcallback url")
+		return
+	}
+	checkErr := sns.CheckHashAndValue(w, r, obj.config.SecretSign)
+	if checkErr != nil {
+		HandleError(w, r, nil, 3010, "Failed in hash check")
+		return
 	}
 
 	//----
@@ -159,26 +128,26 @@ func (obj *FacebookHandler) HandleLoginExit(w http.ResponseWriter, r *http.Reque
 	//
 	svCallbackUrlObj, svCallbackUrlErr := url.Parse(obj.config.CallbackUrl)
 	if svCallbackUrlErr != nil {
-		w.WriteHeader(http.StatusBadRequest)
+		HandleError(w, r, nil, 3020, "Failed to make svcallback url")
 		return
 	}
 	callbackAddr := svCallbackUrlObj.Scheme + "://" + svCallbackUrlObj.Host + r.RequestURI
 
 	tokk, errToken := facebookObj.CallbackFaceBook(w, r, callbackAddr)
 	if errToken != nil {
-		w.WriteHeader(http.StatusBadRequest)
+		HandleError(w, r, nil, 3030, errToken.Error())
 		return
 	}
 	meObj, errMe := facebookObj.GetMe(ctx, tokk.AccessToken)
 	if errMe != nil {
-		w.WriteHeader(http.StatusBadRequest)
+		HandleError(w, r, nil, 3040, errMe.Error())
 		return
 	}
 
 	//---
 	// response owner check
 	//
-	clCallbackObj, _ := url.Parse(r.URL.Query().Get("cb"))
+	//	clCallbackObj, _ := url.Parse(r.URL.Query().Get("cb"))
 	tmpValues := clCallbackObj.Query()
 	kv := obj.onEvent.OnFoundUser(w, r, obj, meObj, tokk)
 	for k, v := range kv {
@@ -190,4 +159,20 @@ func (obj *FacebookHandler) HandleLoginExit(w http.ResponseWriter, r *http.Reque
 
 func Debug(ctx context.Context, message string) {
 	log.Infof(ctx, message)
+}
+
+func HandleError(w http.ResponseWriter, r *http.Request, outputProp *miniprop.MiniProp, errorCode int, errorMessage string) {
+	//
+	//
+	if outputProp == nil {
+		outputProp = miniprop.NewMiniProp()
+	}
+	if errorCode != 0 {
+		outputProp.SetInt("errorCode", errorCode)
+	}
+	if errorMessage != "" {
+		outputProp.SetString("errorMessage", errorMessage)
+	}
+	w.WriteHeader(http.StatusBadRequest)
+	w.Write(outputProp.ToJson())
 }

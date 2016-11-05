@@ -63,7 +63,14 @@ func (obj *OAuth2Client) RequestAccessToken(ctx context.Context, oauthAccessToke
 	request, _ := http.NewRequest(http.MethodPost, targetUri, bytes.NewBufferString(""))
 	request.Method = "GET"
 	//
-	client := urlfetch.Client(ctx)
+	client := http.Client{
+		Transport: &urlfetch.Transport{
+			Context: ctx,
+			AllowInvalidServerCertificate: true,
+			//			Deadline: 10 * time.Second,
+		},
+	}
+	//	client := urlfetch.Client(ctx)
 	res, err := client.Do(request)
 	if err != nil {
 		return nil, err
@@ -97,8 +104,18 @@ func (obj *OAuth2Client) RequestAPI(ctx context.Context, targetUri string, acces
 
 	request, _ := http.NewRequest(http.MethodGet, targetUriWithQuery, bytes.NewBufferString(""))
 	//
-	client := urlfetch.Client(ctx)
-	response, _ := client.Do(request)
+	client := http.Client{
+		Transport: &urlfetch.Transport{
+			Context: ctx,
+			AllowInvalidServerCertificate: true,
+			//			Deadline: 10 * time.Second,
+		},
+	}
+	//client := urlfetch.Client(ctx)
+	response, responseErr := client.Do(request)
+	if responseErr != nil {
+		return nil, errors.New("failed client do : " + responseErr.Error())
+	}
 	result := make([]byte, 1024)
 	i, err := response.Body.Read(result)
 	if err != nil {
