@@ -7,10 +7,8 @@ package twitter
 import (
 	"errors"
 	"net/url"
-	//	"strings"
 
 	"golang.org/x/net/context"
-	//	"google.golang.org/appengine/log"
 )
 
 const (
@@ -29,6 +27,7 @@ type TwitterManager struct {
 	ConsumerSecret    string
 	AccessToken       string
 	AccessTokenSecret string
+	AllowInvalidSSL   bool
 }
 
 type Twitter struct {
@@ -36,15 +35,17 @@ type Twitter struct {
 	ConsumerSecret    string
 	AccessToken       string
 	AccessTokenSecret string
+	AllowInvalidSSL   bool
 	//oauthObj          *OAuth1Client
 }
 
-func NewTwitterManager(consumerKey string, consumerSecret string, accessToken string, accessTokenSecret string) *TwitterManager {
+func NewTwitterManager(consumerKey string, consumerSecret string, accessToken string, accessTokenSecret string, allowInvalidSSL bool) *TwitterManager {
 	ret := new(TwitterManager)
 	ret.ConsumerKey = consumerKey
 	ret.ConsumerSecret = consumerSecret
 	ret.AccessToken = accessToken
 	ret.AccessTokenSecret = accessTokenSecret
+	ret.AllowInvalidSSL = allowInvalidSSL
 	return ret
 }
 
@@ -54,7 +55,7 @@ func (obj *TwitterManager) NewTwitter() *Twitter {
 	ret.ConsumerSecret = obj.ConsumerSecret
 	ret.AccessToken = obj.AccessToken
 	ret.AccessTokenSecret = obj.AccessTokenSecret
-
+	ret.AllowInvalidSSL = obj.AllowInvalidSSL
 	return ret
 }
 
@@ -66,7 +67,7 @@ func (obj *Twitter) SendRequestToken(ctx context.Context, callbackUrl string) (*
 	//
 	//
 	//
-	oauthObj := NewOAuthClient(obj.ConsumerKey, obj.ConsumerSecret, obj.AccessToken, obj.AccessTokenSecret)
+	oauthObj := NewOAuthClient(obj.ConsumerKey, obj.ConsumerSecret, obj.AccessToken, obj.AccessTokenSecret, obj.AllowInvalidSSL)
 	oauthObj.Callback = callbackUrl
 	result, err := oauthObj.Post(ctx, RequestTokenURl, make(map[string]string, 0), "")
 	if err != nil {
@@ -113,7 +114,7 @@ func (obj *Twitter) SendAccessToken(ctx context.Context, oauthToken string, oaut
 	//
 	//
 	//
-	oauthObj := NewOAuthClient(obj.ConsumerKey, obj.ConsumerSecret, obj.AccessToken, obj.AccessTokenSecret)
+	oauthObj := NewOAuthClient(obj.ConsumerKey, obj.ConsumerSecret, obj.AccessToken, obj.AccessTokenSecret, obj.AllowInvalidSSL)
 	oauthObj.Callback = ""
 	oauthObj.AccessToken = oauthToken
 	result, err := oauthObj.Post( //

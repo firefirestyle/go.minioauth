@@ -23,6 +23,7 @@ type FacebookOAuthConfig struct {
 	ConfigFacebookAppId     string
 	CallbackUrl             string
 	SecretSign              string
+	AllowInvalidSSL         bool
 }
 
 type FacebookHandler struct {
@@ -48,7 +49,7 @@ func NewFacebookHandler(config FacebookOAuthConfig, onEvent FacebookHundlerOnEve
 		}
 	}
 	return &FacebookHandler{
-		facebookObj: NewFacebook(config.ConfigFacebookAppId, config.ConfigFacebookAppSecret),
+		facebookObj: NewFacebook(config.ConfigFacebookAppId, config.ConfigFacebookAppSecret, config.AllowInvalidSSL),
 		onEvent:     onEvent,
 		config:      config,
 	}

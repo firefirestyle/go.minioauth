@@ -28,6 +28,7 @@ type TwitterOAuthConfig struct {
 	AccessTokenSecret string
 	CallbackUrl       string
 	SecretSign        string
+	AllowInvalidSSL   bool
 }
 
 type TwitterHandler struct {
@@ -47,7 +48,7 @@ func NewTwitterHandler( //
 	twitterHandlerObj := new(TwitterHandler)
 	//	twitterHandlerObj.callbackUrl = callbackUrl
 	twitterHandlerObj.twitterManager = NewTwitterManager( //
-		config.ConsumerKey, config.ConsumerSecret, config.AccessToken, config.AccessTokenSecret)
+		config.ConsumerKey, config.ConsumerSecret, config.AccessToken, config.AccessTokenSecret, config.AllowInvalidSSL)
 	twitterHandlerObj.config = config
 
 	//
@@ -77,13 +78,14 @@ func (obj *TwitterHandler) MakeUrlNotFoundCallbackError(baseAddr string) (string
 	return urlObj.String(), nil
 }
 
-func (obj *TwitterHandler) MakeUrlFailedToMakeToken(baseAddr string) (string, error) {
+func (obj *TwitterHandler) MakeUrlFailedToMakeToken(baseAddr string, errMessage string) (string, error) {
 	urlObj, err := url.Parse(baseAddr)
 	if err != nil {
 		return "", err
 	}
 	query := urlObj.Query()
-	query.Add("error", UrlOptErrorFailedToMakeToken)
+	query.Add("errorCode", UrlOptErrorFailedToMakeToken)
+	query.Add("errorMessage", errMessage)
 	urlObj.RawQuery = query.Encode()
 	return urlObj.String(), nil
 }
@@ -140,7 +142,7 @@ func (obj *TwitterHandler) HandleLoginEntry(w http.ResponseWriter, r *http.Reque
 	twitterObj := obj.twitterManager.NewTwitter()
 	oauthResult, err := twitterObj.SendRequestToken(appengine.NewContext(r), svCallbackUrlObj.String())
 	if err != nil {
-		failedOAuthUrl, _ := obj.MakeUrlFailedToMakeToken(clCallbackUrl)
+		failedOAuthUrl, _ := obj.MakeUrlFailedToMakeToken(clCallbackUrl, err.Error())
 		redirectUrl = failedOAuthUrl
 	} else {
 		redirectUrl = oauthResult.GetOAuthTokenUrl()

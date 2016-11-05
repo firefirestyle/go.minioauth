@@ -15,20 +15,22 @@ type Facebook struct {
 	AppSecret            string
 	OAuthDialogAddr      string //https://www.facebook.com/dialog/oauth
 	OAuthAccessTokenAddr string //"https://graph.facebook.com/oauth/access_token"
+	AllowInvalidSSL      bool
 }
 
-func NewFacebook(appId string, appSecret string) *Facebook {
+func NewFacebook(appId string, appSecret string, allowInvalidSSL bool) *Facebook {
 	ret := new(Facebook)
 	ret.AppId = appId
 	ret.AppSecret = appSecret
 	ret.OAuthDialogAddr = "https://www.facebook.com/dialog/oauth"
 	ret.OAuthAccessTokenAddr = "https://graph.facebook.com/v2.3/oauth/access_token" //https://graph.facebook.com/oauth/access_token"
+	ret.AllowInvalidSSL = allowInvalidSSL
 	return ret
 }
 
 func (obj *Facebook) GetRequestToken(redirectUrl string) string {
 	//, , obj.OAuthAccessTokenAddr
-	oauth := NewOAuth2Client(obj.AppId, obj.AppSecret) //, obj.OAuthDialogAddr, obj.OAuthAccessTokenAddr)
+	oauth := NewOAuth2Client(obj.AppId, obj.AppSecret, obj.AllowInvalidSSL) //, obj.OAuthDialogAddr, obj.OAuthAccessTokenAddr)
 	return oauth.GetRequestToken(obj.OAuthDialogAddr, redirectUrl)
 }
 
@@ -36,7 +38,7 @@ func (obj *Facebook) CallbackFaceBook(w http.ResponseWriter, r *http.Request, re
 	ctx := appengine.NewContext(r)
 	//
 	//
-	oauth := NewOAuth2Client(obj.AppId, obj.AppSecret)
+	oauth := NewOAuth2Client(obj.AppId, obj.AppSecret, obj.AllowInvalidSSL)
 	//
 	code := r.FormValue("code")
 	return oauth.RequestAccessToken(ctx, obj.OAuthAccessTokenAddr, redirectUrl, code)
@@ -48,7 +50,7 @@ type GetMeResponse struct {
 }
 
 func (obj *Facebook) GetMe(ctx context.Context, accessToken string) (*GetMeResponse, error) {
-	oauth := NewOAuth2Client(obj.AppId, obj.AppSecret)
+	oauth := NewOAuth2Client(obj.AppId, obj.AppSecret, obj.AllowInvalidSSL)
 	response, err := oauth.RequestAPI(ctx, "https://graph.facebook.com/me", accessToken)
 	if err != nil {
 		return nil, err

@@ -22,17 +22,19 @@ import (
 
 // https://developers.facebook.com/docs/facebook-login/manually-build-a-login-flow?locale=en_US
 type OAuth2Client struct {
-	AppId     string
-	AppSecret string
+	AppId           string
+	AppSecret       string
+	AllowInvalidSSL bool
 	//OAuthDialogAddr      string
 	//OAuthAccessTokenAddr string
 }
 
 //, oauthDialogAddr string, oauthAccessTokenAddr string
-func NewOAuth2Client(appId string, appSecret string) *OAuth2Client {
+func NewOAuth2Client(appId string, appSecret string, allowInvalidSSL bool) *OAuth2Client {
 	ret := new(OAuth2Client)
 	ret.AppId = appId
 	ret.AppSecret = appSecret
+	ret.AllowInvalidSSL = allowInvalidSSL
 	//ret.OAuthDialogAddr = oauthDialogAddr
 	//ret.OAuthAccessTokenAddr = oauthAccessTokenAddr
 	return ret
@@ -63,14 +65,18 @@ func (obj *OAuth2Client) RequestAccessToken(ctx context.Context, oauthAccessToke
 	request, _ := http.NewRequest(http.MethodPost, targetUri, bytes.NewBufferString(""))
 	request.Method = "GET"
 	//
-	client := http.Client{
-		Transport: &urlfetch.Transport{
-			Context: ctx,
-			AllowInvalidServerCertificate: true,
-			//			Deadline: 10 * time.Second,
-		},
+	var client *http.Client
+	if obj.AllowInvalidSSL == true {
+		client = &http.Client{
+			Transport: &urlfetch.Transport{
+				Context: ctx,
+				AllowInvalidServerCertificate: true,
+				//			Deadline: 10 * time.Second,
+			},
+		}
+	} else {
+		client = urlfetch.Client(ctx)
 	}
-	//	client := urlfetch.Client(ctx)
 	res, err := client.Do(request)
 	if err != nil {
 		return nil, err
@@ -104,14 +110,18 @@ func (obj *OAuth2Client) RequestAPI(ctx context.Context, targetUri string, acces
 
 	request, _ := http.NewRequest(http.MethodGet, targetUriWithQuery, bytes.NewBufferString(""))
 	//
-	client := http.Client{
-		Transport: &urlfetch.Transport{
-			Context: ctx,
-			AllowInvalidServerCertificate: true,
-			//			Deadline: 10 * time.Second,
-		},
+	var client *http.Client
+	if obj.AllowInvalidSSL == true {
+		client = &http.Client{
+			Transport: &urlfetch.Transport{
+				Context: ctx,
+				AllowInvalidServerCertificate: true,
+				//			Deadline: 10 * time.Second,
+			},
+		}
+	} else {
+		client = urlfetch.Client(ctx)
 	}
-	//client := urlfetch.Client(ctx)
 	response, responseErr := client.Do(request)
 	if responseErr != nil {
 		return nil, errors.New("failed client do : " + responseErr.Error())

@@ -48,9 +48,10 @@ type OAuth1Client struct {
 	Method            string
 	Version           string
 	AuthParam         map[string]string
+	AllowInvalidSSL   bool
 }
 
-func NewOAuthClient(consumerKey string, consumerSecret string, accessToken string, accessTokenSecret string) *OAuth1Client {
+func NewOAuthClient(consumerKey string, consumerSecret string, accessToken string, accessTokenSecret string, allowInvalidSSL bool) *OAuth1Client {
 	ret := new(OAuth1Client)
 	ret.ConsumerKey = consumerKey
 	ret.ConsumerSecret = consumerSecret
@@ -59,6 +60,7 @@ func NewOAuthClient(consumerKey string, consumerSecret string, accessToken strin
 	ret.Method = OAuth1SignatureMethodHmacSHA1
 	ret.Version = OAuth1Version1
 	ret.AuthParam = make(map[string]string, 0)
+	ret.AllowInvalidSSL = allowInvalidSSL
 	return ret
 }
 
@@ -81,14 +83,19 @@ func (obj *OAuth1Client) Post(ctx context.Context,
 
 	//
 	//
-	client := http.Client{
-		Transport: &urlfetch.Transport{
-			Context: ctx,
-			AllowInvalidServerCertificate: true,
-			//			Deadline: 10 * time.Second,
-		},
+	var client *http.Client
+	if obj.AllowInvalidSSL == true {
+		client = &http.Client{
+			Transport: &urlfetch.Transport{
+				Context: ctx,
+				AllowInvalidServerCertificate: true,
+				//			Deadline: 10 * time.Second,
+			},
+		}
+	} else {
+		client = urlfetch.Client(ctx)
 	}
-	//client := urlfetch.Client(ctx)
+
 	//	client.Transport.
 
 	response, err1 := client.Do(request)
